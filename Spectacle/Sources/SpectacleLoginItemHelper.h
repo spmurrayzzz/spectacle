@@ -1,10 +1,10 @@
 #import <Foundation/Foundation.h>
+#import <ServiceManagement/ServiceManagement.h>
 
 @interface SpectacleLoginItemHelper : NSObject
 
-+ (BOOL)isLoginItemEnabledForBundle:(NSBundle *)bundle;
++ (SMAppServiceStatus)loginItemStatus;
 
-+ (void)enableLoginItemForBundle:(NSBundle *)bundle;
-+ (void)disableLoginItemForBundle:(NSBundle *)bundle;
++ (BOOL)setLoginItemEnabled:(BOOL)enabled error:(NSError **)error;
 
 @end

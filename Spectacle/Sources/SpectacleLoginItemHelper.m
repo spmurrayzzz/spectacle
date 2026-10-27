@@ -2,78 +2,24 @@
 
 @implementation SpectacleLoginItemHelper
 
-+ (BOOL)isLoginItemEnabledForBundle:(NSBundle *)bundle
++ (SMAppServiceStatus)loginItemStatus
 {
-  LSSharedFileListRef sharedFileList = LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL);
-  NSString *applicationPath = bundle.bundlePath;
-  BOOL result = NO;
-  if (sharedFileList) {
-    UInt32 seedValue;
-    NSArray *sharedFileListArray = CFBridgingRelease(LSSharedFileListCopySnapshot(sharedFileList, &seedValue));
-    for (id sharedFile in sharedFileListArray) {
-      LSSharedFileListItemRef sharedFileListItem = (__bridge LSSharedFileListItemRef)sharedFile;
-      CFURLRef applicationPathURL = NULL;
-      LSSharedFileListItemResolve(sharedFileListItem, 0, (CFURLRef *)&applicationPathURL, NULL);
-      if (applicationPathURL != NULL) {
-        NSString *resolvedApplicationPath = [(__bridge NSURL *)applicationPathURL path];
-        CFRelease(applicationPathURL);
-        if ([resolvedApplicationPath compare:applicationPath] == NSOrderedSame) {
-          result = YES;
-          break;
-        }
-      }
-    }
-    CFRelease(sharedFileList);
-  } else {
-    NSLog(@"Unable to create the shared file list.");
-  }
-  return result;
+  return SMAppService.mainAppService.status;
 }
 
-+ (void)enableLoginItemForBundle:(NSBundle *)bundle
++ (BOOL)setLoginItemEnabled:(BOOL)enabled error:(NSError **)error
 {
-  LSSharedFileListRef sharedFileList = LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL);
-  NSString *applicationPath = bundle.bundlePath;
-  NSURL *applicationPathURL = [NSURL fileURLWithPath:applicationPath];
-  if (sharedFileList) {
-    LSSharedFileListItemRef sharedFileListItem = LSSharedFileListInsertItemURL(sharedFileList,
-                                                                               kLSSharedFileListItemLast,
-                                                                               NULL,
-                                                                               NULL,
-                                                                               (__bridge CFURLRef)applicationPathURL,
-                                                                               NULL,
-                                                                               NULL);
-    if (sharedFileListItem) {
-      CFRelease(sharedFileListItem);
+  SMAppService *service = SMAppService.mainAppService;
+  if (enabled) {
+    if (service.status == SMAppServiceStatusEnabled) {
+      return YES;
     }
-    CFRelease(sharedFileList);
-  } else {
-    NSLog(@"Unable to create the shared file list.");
+    return [service registerAndReturnError:error];
   }
-}
-
-+ (void)disableLoginItemForBundle:(NSBundle *)bundle
-{
-  LSSharedFileListRef sharedFileList = LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL);
-  NSString *applicationPath = bundle.bundlePath;
-  if (sharedFileList) {
-    UInt32 seedValue;
-    NSArray *sharedFileListArray = CFBridgingRelease(LSSharedFileListCopySnapshot(sharedFileList, &seedValue));
-    for (id sharedFile in sharedFileListArray) {
-      LSSharedFileListItemRef sharedFileListItem = (__bridge LSSharedFileListItemRef)sharedFile;
-      CFURLRef applicationPathURL;
-      if (LSSharedFileListItemResolve(sharedFileListItem, 0, &applicationPathURL, NULL) == noErr) {
-        NSString *resolvedApplicationPath = [(__bridge NSURL *)applicationPathURL path];
-        if ([resolvedApplicationPath compare:applicationPath] == NSOrderedSame) {
-          LSSharedFileListItemRemove(sharedFileList, sharedFileListItem);
-        }
-        CFRelease(applicationPathURL);
-      }
-    }
-    CFRelease(sharedFileList);
-  } else {
-    NSLog(@"Unable to create the shared file list.");
+  if (service.status == SMAppServiceStatusNotRegistered) {
+    return YES;
   }
+  return [service unregisterAndReturnError:error];
 }
 
 @end

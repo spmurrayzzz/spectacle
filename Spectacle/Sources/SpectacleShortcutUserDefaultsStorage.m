@@ -23,7 +23,12 @@
 {
   NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
   for (SpectacleShortcut *shortcut in shortcuts) {
-    NSData *shortcutData = [NSKeyedArchiver archivedDataWithRootObject:shortcut];
+    NSError *error = nil;
+    NSData *shortcutData = [NSKeyedArchiver archivedDataWithRootObject:shortcut requiringSecureCoding:NO error:&error];
+    if (!shortcutData) {
+      NSLog(@"Unable to archive shortcut: %@", error.localizedDescription);
+      continue;
+    }
     NSString *shortcutName = shortcut.shortcutName;
     if (![shortcutData isEqualToData:[userDefaults dataForKey:shortcutName]]) {
       [userDefaults setObject:shortcutData forKey:shortcutName];
@@ -65,7 +70,15 @@
 {
   NSMutableArray<SpectacleShortcut *> *shortcuts = [NSMutableArray new];
   for (NSData *shortcutData in dictionary.allValues) {
-    SpectacleShortcut *shortcut = [NSKeyedUnarchiver unarchiveObjectWithData:shortcutData];
+    NSError *error = nil;
+    NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingFromData:shortcutData error:&error];
+    unarchiver.requiresSecureCoding = NO;
+    SpectacleShortcut *shortcut = [unarchiver decodeObjectForKey:NSKeyedArchiveRootObjectKey];
+    [unarchiver finishDecoding];
+    if (![shortcut isKindOfClass:[SpectacleShortcut class]]) {
+      NSLog(@"Unable to unarchive shortcut: %@", error.localizedDescription ?: unarchiver.error.localizedDescription);
+      continue;
+    }
     [shortcuts addObject:[shortcut copyWithShortcutAction:action]];
   }
   return shortcuts;

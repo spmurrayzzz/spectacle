@@ -37,7 +37,6 @@
 - (void)windowDidLoad
 {
   NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-  NSInteger loginItemEnabledState = NSOffState;
   BOOL isStatusItemEnabled = [NSUserDefaults.standardUserDefaults boolForKey:@"StatusItemEnabled"];
   _shortcutRecorders = @{
                          @"MoveToCenter": _moveToCenterShortcutRecorder,
@@ -68,10 +67,11 @@
                          selector:@selector(loadRegisteredShortcuts)
                              name:@"SpectacleRestoreDefaultShortcutsNotification"
                            object:nil];
-  if ([SpectacleLoginItemHelper isLoginItemEnabledForBundle:NSBundle.mainBundle]) {
-    loginItemEnabledState = NSOnState;
-  }
-  self.loginItemEnabled.state = loginItemEnabledState;
+  [notificationCenter addObserver:self
+                         selector:@selector(updateLoginItemState)
+                             name:NSApplicationDidBecomeActiveNotification
+                           object:nil];
+  [self updateLoginItemState];
   [self.statusItemEnabled selectItemWithTag:isStatusItemEnabled ? 0 : 1];
   self.window.title = [@"Spectacle " stringByAppendingString:SpectacleUtilities.applicationVersion];
   self.footerView.wantsLayer = YES;
@@ -141,14 +141,38 @@ didClearExistingShortcut:(SpectacleShortcut *)shortcut
   }];
 }
 
+- (void)updateLoginItemState
+{
+  SMAppServiceStatus status = [SpectacleLoginItemHelper loginItemStatus];
+  self.loginItemEnabled.enabled = status != SMAppServiceStatusNotFound;
+  self.loginItemEnabled.allowsMixedState = status == SMAppServiceStatusRequiresApproval;
+  self.loginItemEnabled.state = status == SMAppServiceStatusEnabled ? NSControlStateValueOn : NSControlStateValueOff;
+  self.loginItemEnabled.toolTip = nil;
+  if (status == SMAppServiceStatusRequiresApproval) {
+    self.loginItemEnabled.state = NSControlStateValueMixed;
+    self.loginItemEnabled.toolTip = @"Approval is required in System Settings > General > Login Items. Click to open settings.";
+  } else if (status == SMAppServiceStatusNotFound) {
+    self.loginItemEnabled.toolTip = @"The login item is unavailable for this app bundle.";
+  }
+}
+
 - (IBAction)toggleLoginItem:(id)sender
 {
-  NSBundle *applicationBundle = NSBundle.mainBundle;
-  if (self.loginItemEnabled.state == NSOnState) {
-    [SpectacleLoginItemHelper enableLoginItemForBundle:applicationBundle];
+  BOOL enabled = self.loginItemEnabled.state != NSControlStateValueOff;
+  if (enabled && [SpectacleLoginItemHelper loginItemStatus] == SMAppServiceStatusRequiresApproval) {
+    [SMAppService openSystemSettingsLoginItems];
   } else {
-    [SpectacleLoginItemHelper disableLoginItemForBundle:applicationBundle];
+    NSError *error = nil;
+    if (![SpectacleLoginItemHelper setLoginItemEnabled:enabled error:&error]) {
+      [self updateLoginItemState];
+      [self presentError:error];
+      return;
+    }
+    if (enabled && [SpectacleLoginItemHelper loginItemStatus] == SMAppServiceStatusRequiresApproval) {
+      [SMAppService openSystemSettingsLoginItems];
+    }
   }
+  [self updateLoginItemState];
 }
 
 - (IBAction)toggleStatusItem:(id)sender
